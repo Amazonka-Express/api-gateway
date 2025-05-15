@@ -1,32 +1,27 @@
 from datetime import timedelta
-from pprint import pprint
 from typing import Annotated
 
+import grpc
 from authlib.integrations.base_client import OAuthError
 from authlib.oauth2.rfc6749 import OAuth2Token
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
+from google.protobuf.json_format import MessageToDict
 from starlette import status
 
-from app.config import (
-    FRONTEND_URL,
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI,
-)
+from app.config import FRONTEND_URL, GOOGLE_REDIRECT_URI, USER_SERVICE_URL
 
-# from .models import User
-from .schemas import CreateUserRequest, GoogleUser, RefreshTokenRequest, Token
+from .proto_gen import (
+    user_p2p,
+    user_pb2,
+    user_service_p2p,
+    user_service_pb2,
+    user_service_pb2_grpc,
+)
 from .services import (
-    TokenDep,
-    # authenticate_user,
-    # bcrypt_context,
     create_access_token,
     create_refresh_token,
-    create_user_from_google_info,
     decode_token,
-    get_user_by_google_sub,
     oauth,
     oauth_bearer,
     token_expired,
@@ -36,13 +31,22 @@ from .services import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.get("/google")
+@router.get("/google", response_class=RedirectResponse)
 async def login_google(request: Request):
+    """Initiates the Google OAuth2 login flow by redirecting the user to Google's authorization page."""
     return await oauth.google.authorize_redirect(request, GOOGLE_REDIRECT_URI)
 
 
-@router.get("/callback/google")
+@router.get("/callback/google", response_class=RedirectResponse)
 async def auth_google(request: Request):
+    """
+    Handles the Google OAuth2 callback, authenticates the user with the backend user service via gRPC,
+    generates access and refresh tokens, and redirects the user to the frontend with authentication cookies.
+    \nRaises:
+        HTTPException: If the OAuth2 authorization fails.
+    \nReturns:
+        RedirectResponse: Redirects the user to the frontend application, setting authentication cookies.
+    """
     try:
         user_response: OAuth2Token = await oauth.google.authorize_access_token(request)
     except OAuthError:
@@ -51,21 +55,34 @@ async def auth_google(request: Request):
             detail="Could not validate credentials",
         )
 
+    # TODO przenieś do services
     user_info = user_response.get("userinfo")
+    async with grpc.aio.insecure_channel(USER_SERVICE_URL) as channel:
+        stub = user_service_pb2_grpc.UserServiceStub(channel)
+        try:
+            response: user_service_pb2.AuthenticateWithGoogleResponse = (
+                await stub.AuthenticateWithGoogle(
+                    user_service_pb2.AuthenticateWithGoogleRequest(
+                        user=user_pb2.UserMetadata(
+                            email=user_info.get("email"),
+                            firstName=user_info.get("given_name"),
+                            lastName=user_info.get("family_name"),
+                        )
+                    )
+                )
+            )
+        except grpc.RpcError as e:
+            return RedirectResponse(
+                f"{FRONTEND_URL}/auth?error={e.code()} - {e.details()}"
+            )
 
-    google_user = GoogleUser(**user_info)
-
-    existing_user = get_user_by_google_sub(google_user.sub)
-
-    if existing_user:
-        pprint("Existing user")
-        user = existing_user
-    else:
-        pprint("Creating user")
-        user = create_user_from_google_info(google_user)
-
-    access_token = create_access_token(user.username, user.id, timedelta(days=7))
-    refresh_token = create_refresh_token(user.username, user.id, timedelta(days=14))
+    user = user_p2p.User(**MessageToDict(response.user))
+    access_token = create_access_token(
+        user.email, user.role, "#TODO ID", timedelta(days=7)
+    )
+    refresh_token = create_refresh_token(
+        user.email, user.role, "#TODO ID", timedelta(days=14)
+    )
 
     response = RedirectResponse(f"{FRONTEND_URL}/auth")
     response.set_cookie(
@@ -87,21 +104,48 @@ async def auth_google(request: Request):
     return response
 
 
-# @router.post("/create-user", status_code=status.HTTP_201_CREATED)
-# async def create_user(create_user_request: CreateUserRequest):
-#     create_user_model = User(
-#         username=create_user_request.username,
-#         hashed_password=bcrypt_context.hash(create_user_request.password),
-#     )
+@router.post(
+    "/create-user",
+    status_code=status.HTTP_201_CREATED,
+    response_model=user_service_p2p.CreateUserResponse,
+)
+async def create_user(user_in: user_p2p.User):
+    """Creates a new user by forwarding the user data to a gRPC user service."""
+    async with grpc.aio.insecure_channel(USER_SERVICE_URL) as channel:
+        stub = user_service_pb2_grpc.UserServiceStub(channel)
+        try:
+            response: user_service_pb2.CreateUserResponse = await stub.Create(
+                user_pb2.User(**user_in.model_dump())
+            )
+        except grpc.RpcError as e:
+            return HTTPException("Could not create user", status_code=e.code())
+    return MessageToDict(response)
 
-#     db.add(create_user_model)
-#     db.commit()
 
-#     return create_user_request
+@router.delete(
+    "/delete-user/{email}",
+    response_model=user_service_p2p.DeleteUserResponse,
+)
+async def delete_user(email: str):
+    """Deletes user by forwarding the user ID to a gRPC user service."""
+    async with grpc.aio.insecure_channel(USER_SERVICE_URL) as channel:
+        stub = user_service_pb2_grpc.UserServiceStub(channel)
+        try:
+            response: user_service_pb2.DeleteUserResponse = await stub.Delete(
+                user_service_pb2.DeleteUserRequest(email=email)
+            )
+        except grpc.RpcError as e:
+            return HTTPException("Could not delete user", status_code=e.code())
+    return MessageToDict(response)
 
 
-@router.get("/get-user", status_code=status.HTTP_201_CREATED)
+@router.get(
+    "/get-user",
+    status_code=status.HTTP_201_CREATED,
+    response_model=user_p2p.User,
+)
 async def get_user(user: user_dependency):
+    """Retrieve the current authenticated user's information."""
     return user
 
 
@@ -140,7 +184,9 @@ async def refresh_access_token(token: Annotated[str, Depends(oauth_bearer)]):
             detail="Refresh token is not valid.",
         )
 
-    access_token = create_access_token(user["sub"], user["id"], timedelta(days=7))
+    access_token = create_access_token(
+        user["email"], user["role"], user["id"], timedelta(days=7)
+    )
     return {
         "access_token": access_token,
     }

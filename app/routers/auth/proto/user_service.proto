@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package user_service;
+
+import "user.proto"; // Import the User message
+
+service UserService {
+    rpc AuthenticateWithGoogle(AuthenticateWithGoogleRequest) returns (AuthenticateWithGoogleResponse);
+    rpc GetUserByEmail(GetUserByEmailRequest) returns (user.User);
+    rpc Create(user.User) returns (CreateUserResponse);
+    rpc Delete(DeleteUserRequest) returns (DeleteUserResponse);
+}
+
+message AuthenticateWithGoogleRequest {
+    user.UserMetadata user = 1;
+}
+
+message AuthenticateWithGoogleResponse {
+    user.User user = 1;
+    bool is_new_user = 2;
+}
+
+message GetUserByEmailRequest { string email = 1; }
+
+message CreateUserResponse {
+    bool success = 1;
+}
+
+message DeleteUserRequest {
+    string email = 1;
+}
+
+message DeleteUserResponse {
+    bool success = 1;
+}
