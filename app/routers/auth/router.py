@@ -73,7 +73,7 @@ async def auth_google(request: Request):
             )
         except grpc.RpcError as e:
             return RedirectResponse(
-                f"{FRONTEND_URL}/auth?error={e.code()} - {e.details()}"
+                f"{FRONTEND_URL}/error?error={e.code()} - {e.details()}"
             )
 
     user = user_p2p.User(**MessageToDict(response.user))
@@ -84,7 +84,7 @@ async def auth_google(request: Request):
         user.email, user.role, "#TODO ID", timedelta(days=14)
     )
 
-    response = RedirectResponse(f"{FRONTEND_URL}/auth")
+    response = RedirectResponse(f"{FRONTEND_URL}/app")
     response.set_cookie(
         key="access_token",
         value=access_token,
