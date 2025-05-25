@@ -114,4 +114,4 @@ def token_expired(token: Annotated[str, Depends(oauth_bearer)]):
         )
 
 
-user_dependency = Annotated[user_p2p.User, Depends(get_current_user)]
+UserDep = Annotated[user_p2p.User, Depends(get_current_user)]

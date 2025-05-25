@@ -19,13 +19,13 @@ from .proto_gen import (
     user_service_pb2_grpc,
 )
 from .services import (
+    UserDep,
     create_access_token,
     create_refresh_token,
     decode_token,
     oauth,
     oauth_bearer,
     token_expired,
-    user_dependency,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -144,7 +144,7 @@ async def delete_user(email: str):
     status_code=status.HTTP_201_CREATED,
     response_model=user_p2p.User,
 )
-async def get_user(user: user_dependency):
+async def get_user(user: UserDep):
     """Retrieve the current authenticated user's information."""
     return user
 

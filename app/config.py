@@ -10,6 +10,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL")
+BACKEND_URL = os.getenv("BACKEND_URL")
 
 ORIGINS = os.getenv("ORIGIN").split(",") if os.getenv("ORIGIN") else ["*"]
 ALGORITHM = "HS256"
