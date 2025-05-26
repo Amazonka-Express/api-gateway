@@ -3,7 +3,7 @@ name: Docker Build and Push
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   build-and-push:
@@ -20,12 +20,12 @@ jobs:
       
       - name: Build Docker image
         env:
-          IMAGE_NAME: "mnowerty/api-gateway"
+          IMAGE_NAME: "mnowerty/ersms-api-gateway"
         run: |
           docker build -t $IMAGE_NAME:latest .
       
       - name: Push Docker image
         env:
-          IMAGE_NAME: "mnowerty/api-gateway"
+          IMAGE_NAME: "mnowerty/ersms-api-gateway"
         run: |
           docker push $IMAGE_NAME:latest
