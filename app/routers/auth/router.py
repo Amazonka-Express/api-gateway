@@ -92,6 +92,7 @@ async def auth_google(request: Request):
         max_age=2 * 60 * 60,  # 2 hours
         secure=False,  # Set to True if using HTTPS
         samesite="Lax",
+        domain=".ersms.online"
     )
     response.set_cookie(
         key="refresh_token",
@@ -100,6 +101,7 @@ async def auth_google(request: Request):
         max_age=24 * 60 * 60,  # 24 hours
         secure=False,  # Set to True if using HTTPS
         samesite="Lax",
+        domain=".ersms.online"
     )
     return response
 
