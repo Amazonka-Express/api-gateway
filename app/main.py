@@ -40,6 +40,7 @@ async def test():
 )
 async def proxy(path: str, request: Request, user: UserDep):
     url = f"{BACKEND_URL}/{path}"
+    print(url)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             # Kopiowanie nagłówków, usuwamy te niepotrzebne
@@ -80,6 +81,7 @@ async def proxy(path: str, request: Request, user: UserDep):
         )
 
     except httpx.RequestError as exc:
+        print(exc)
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={"error": "Bad Gateway", "details": str(exc)},
